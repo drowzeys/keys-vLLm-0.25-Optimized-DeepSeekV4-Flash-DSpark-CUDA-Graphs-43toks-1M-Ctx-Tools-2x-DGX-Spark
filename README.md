@@ -54,9 +54,20 @@ request wedges the rank-0 worker, and the engine dies at the 300 s RPC timeout. 
 **CUDA-graphs decode path on sm_121a** (FULL_AND_PIECEWISE mode), not DSpark: `py-spy` shows the
 surviving rank idle in `shm_broadcast` dequeue while the wedged rank sits in the full decode
 graph replay. `--enforce-eager` eliminates it completely (256/512-tok and `ignore_eos` runs all
-pass repeatedly). Untested lead for graph lovers: `-cc.cudagraph_mode=PIECEWISE` may salvage
-graphs by skipping only the FULL decode graph — that experiment is the likely route past the
-C16 gap vs the graphs-on 0.24 port.
+pass repeatedly).
+
+**PIECEWISE tested (2026-07-08): also fatal, just slower to die.** `-cc.cudagraph_mode=PIECEWISE`
+boots clean (capture succeeds, "Breakable CUDA graph enabled", KV pool 3.99M tokens) and survives
+a smoke test plus a few sustained 256/512-token requests — then the engine dumps
+`scheduled_spec_decode_tokens=[-1,-1,-1,-1,-1]` (the DSpark draft emitting invalid token ids) and
+dies at the same `sample_tokens` RPC timeout. So Wall 2 is not the FULL decode graph specifically:
+**any CUDA-graph replay corrupts the upstream DSpark draft path on sm_121a** — FULL wedges on the
+first sustained request, PIECEWISE corrupts the draft after a handful. (Same `[-1]` invalid-draft
+signature as the Hy3 turboquant×MTP bug on the same silicon — graph/kv-path interactions with
+spec-decode draft layers look like a GB10 theme.) `--enforce-eager` remains **mandatory** with
+spec decode on. Untested residual: PIECEWISE + `SPEC=none` may hold for graphs-without-spec, but
+no-spec eager C1 is 17.6 — you'd need >1.9× from graphs to beat eager+DSpark's 33, so it's not
+the route to single-stream wins.
 
 ## Step-by-step
 

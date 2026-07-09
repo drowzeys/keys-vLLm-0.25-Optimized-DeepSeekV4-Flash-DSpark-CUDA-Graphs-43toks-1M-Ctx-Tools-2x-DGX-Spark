@@ -4,6 +4,7 @@
 # TP=2 across .1 (rank0, API :8000) + .2 (rank1 headless). Launch rank1 FIRST, then rank0.
 # Usage: dsv4-025-serve.sh <rank 0|1>
 # Knobs: SPEC(dspark|none) SPEC_TOKENS(5) SEQS(16) MAXLEN(1048576) KVD(fp8_ds_mla) GMU(0.85) IMG
+#        EAGER(1)|CC_MODE(PIECEWISE) — Wall 2: FULL decode graph wedges sm_121a; PIECEWISE = the untested salvage lead
 set -uo pipefail
 RANK="${1:?usage: dsv4-025-serve.sh <rank 0|1>}"
 MASTER=10.100.10.3; PORT=29551; IF=enp1s0f1np1; HCA=rocep1s0f1
@@ -12,6 +13,7 @@ SPEC="${SPEC:-dspark}"; SPEC_TOKENS="${SPEC_TOKENS:-5}"
 SEQS="${SEQS:-16}"; MAXLEN="${MAXLEN:-1048576}"; KVD="${KVD:-fp8_ds_mla}"; GMU="${GMU:-0.85}"
 EAGER="${EAGER:-0}"; PATCH_SWA="${PATCH_SWA:-0}"
 EAGERARG=""; [ "$EAGER" = "1" ] && EAGERARG="--enforce-eager"
+CC_MODE="${CC_MODE:-}"; [ "$EAGER" != "1" ] && [ -n "$CC_MODE" ] && EAGERARG="-cc.cudagraph_mode=$CC_MODE"
 PATCHMOUNT=""; [ "$PATCH_SWA" = "1" ] && PATCHMOUNT="-v $HOME/dsv4-025-patches/sparse_swa.py:/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/mla/sparse_swa.py:ro"
 MODELDIR="$HOME/models/dsv4-flash-dspark"
 SELF=$(ip -4 addr show $IF 2>/dev/null|awk '/inet /{print $2}'|cut -d/ -f1); SELF=${SELF:-$MASTER}
